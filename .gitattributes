@@ -1,0 +1,20 @@
+# ==================================================================
+# .gitattributes - keeps line endings consistent across machines
+# ==================================================================
+# Without this, Windows checks files out with CRLF line endings and
+# Linux with LF, so a teammate on another OS sees every line of every
+# file as "changed" in their diff.
+#
+# "text=auto" tells Git: normalise to LF inside the repository, and
+# convert to the local convention on checkout.
+* text=auto
+
+# Files that must keep LF even on Windows, because Linux tools read them
+*.sh    text eol=lf
+Procfile text eol=lf
+
+# Binary files Git must never try to convert
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.ico   binary

@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------
+# AI Resume Analyzer - Python dependencies
+# Install with:  pip install -r requirements.txt
+# New libraries will be added in later phases.
+# ---------------------------------------------------------------
+
+# Phase 1 - Web framework + environment variable loader
+Flask==3.1.0
+python-dotenv==1.0.1
+
+# Phase 2 - PDF text extraction
+PyMuPDF==1.28.2
+
+# Phase 5 - calling the LLM API over HTTPS
+requests==2.32.3
+
+# Phase 7 - MySQL database driver
+mysql-connector-python==26.7.0
+
+# Phase 9 - automated tests (development only)
+pytest==8.3.4
+
+# Phase 10 - production web servers.
+# These are NOT used by "python app.py". They are what runs the app on a
+# real server. gunicorn installs on Windows but only runs on Linux;
+# waitress is the Windows equivalent.
+gunicorn==23.0.0
+waitress==3.0.2

@@ -1,0 +1,1193 @@
+<!--
+  result.html
+  ===========
+  Shown after a resume has been uploaded successfully.
+
+  PHASE 2 version: it proves the pipeline works end to end by showing
+  the file statistics and the raw extracted text.
+
+  This page grows in later phases:
+    Phase 3 -> skills and sections
+    Phase 4 -> ATS score
+    Phase 5 -> AI suggestions
+    Phase 6 -> job match percentage
+    Phase 8 -> charts and the final dashboard layout
+-->
+{% extends "base.html" %}
+
+{% block title %}Extraction Result | AI Resume Analyzer{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="container">
+
+        <!-- ---------- Page heading ---------- -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+            <div>
+                <h1 class="section-title mb-1">Text extracted successfully</h1>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-file-earmark-pdf text-danger"></i>
+                    {{ original_name }}
+                    <span class="text-muted">&middot; {{ file_size }}</span>
+                </p>
+            </div>
+            <div class="d-flex gap-2 no-print">
+                <!--
+                  Opens the browser's own print dialog. style.css has an
+                  @media print block that hides the navbar, buttons and
+                  footer, so the printout is just the report.
+
+                  The click handler lives in static/js/script.js, NOT in
+                  an onclick="" attribute. Our Content-Security-Policy
+                  blocks inline event handlers - they are the same thing
+                  as an inline <script>, and blocking them is most of
+                  what makes CSP effective against injected code.
+                -->
+                <button class="btn btn-soft" id="printBtn" type="button">
+                    <i class="bi bi-printer"></i> Save as PDF
+                </button>
+                <a href="{{ url_for('home') }}" class="btn btn-primary">
+                    <i class="bi bi-arrow-left"></i> Analyze another
+                </a>
+            </div>
+        </div>
+
+        <!--
+          ============ SUMMARY BAR (Phase 8) ============
+          The four numbers a reader wants first, before any detail.
+          These are stat tiles, not charts - a single number does not
+          need a plot around it.
+        -->
+        {% if parsed %}
+        <div class="summary-bar mb-4">
+            <div class="summary-item">
+                <span class="summary-label">ATS Score</span>
+                <span class="summary-value text-{{ ats.grade_color if ats else 'muted' }}">
+                    {{ ats.total if ats else '-' }}<small>/100</small>
+                </span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Job Match</span>
+                <span class="summary-value text-{{ job_match.grade_color if job_match else 'muted' }}">
+                    {% if job_match %}{{ job_match.match_percent }}<small>%</small>
+                    {% else %}<small class="text-muted">no JD</small>{% endif %}
+                </span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Skills found</span>
+                <span class="summary-value">{{ parsed.skills.technical_count }}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Sections</span>
+                <span class="summary-value">
+                    {{ parsed.stats.sections_present }}<small>/{{ parsed.stats.sections_total }}</small>
+                </span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ---------- Statistic cards ---------- -->
+        <!--
+          Four small cards. In Phase 8 these become the ATS score,
+          job match score and the charts.
+        -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon icon-blue"><i class="bi bi-files"></i></div>
+                    <div class="stat-value">{{ page_count }}</div>
+                    <div class="stat-label">Pages</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon icon-purple"><i class="bi bi-type"></i></div>
+                    <div class="stat-value">{{ word_count }}</div>
+                    <div class="stat-label">Words</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon icon-green"><i class="bi bi-123"></i></div>
+                    <div class="stat-value">{{ char_count }}</div>
+                    <div class="stat-label">Characters</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon icon-orange"><i class="bi bi-briefcase"></i></div>
+                    <!--
+                      Jinja "if" works just like Python's if.
+                      We show Yes/No depending on whether the user pasted
+                      a job description. It is used properly in Phase 6.
+                    -->
+                    <div class="stat-value">
+                        {% if job_description %}Yes{% else %}No{% endif %}
+                    </div>
+                    <div class="stat-label">Job description given</div>
+                </div>
+            </div>
+        </div>
+
+        <!--
+          ============ ATS SCORE (Phase 4) ============
+          The headline result. Three parts:
+            1. A circular gauge with the score out of 100
+            2. A progress bar per scoring category
+            3. A prioritised list of improvements
+        -->
+        {% if ats %}
+        <div class="row g-4 mb-4">
+
+            <!-- ---------- The score gauge ---------- -->
+            <div class="col-lg-4">
+                <div class="card app-card h-100 score-card">
+                    <div class="card-body text-center d-flex flex-column
+                                justify-content-center p-4">
+
+                        <p class="score-heading">ESTIMATED ATS SCORE</p>
+
+                        <!--
+                          The ring is pure CSS. The "--value" custom property
+                          is set inline from Jinja, and style.css uses it in a
+                          conic-gradient to fill the circle. No chart library
+                          needed for a single number.
+                        -->
+                        <div class="score-ring score-ring-{{ ats.grade_color }}"
+                             style="--value: {{ ats.total }}">
+                            <div class="score-ring-inner">
+                                <span class="score-number">{{ ats.total }}</span>
+                                <span class="score-outof">/ 100</span>
+                            </div>
+                        </div>
+
+                        <p class="score-grade text-{{ ats.grade_color }}">
+                            {{ ats.grade }}
+                        </p>
+                        <p class="score-message">{{ ats.grade_message }}</p>
+
+                        <p class="score-disclaimer mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            This is an <strong>estimated</strong> ATS-style
+                            score from this project's own rules. It is not the
+                            score of any specific company's ATS.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Category breakdown ---------- -->
+            <div class="col-lg-8">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">
+                            <i class="bi bi-bar-chart-steps"></i> Score Breakdown
+                        </span>
+                        <span class="badge text-bg-light">
+                            {{ ats.points_lost }} points available
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <!--
+                          One row per scoring category.
+
+                          Each row hides its calculation inside a <details>
+                          element - built into HTML, it shows and hides its
+                          content on click with no JavaScript at all.
+
+                          This comment sits OUTSIDE the loop on purpose. HTML
+                          comments are sent to the browser, so a comment
+                          inside the loop would be repeated 8 times in the
+                          response for no reason.
+                        -->
+                        {% for category in ats.categories %}
+                        <div class="score-row">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="score-row-label">
+                                    <i class="bi bi-{{ category.icon }}"></i>
+                                    {{ category.label }}
+                                </span>
+                                <span class="score-row-value text-{{ category.status }}">
+                                    {{ category.score }} / {{ category.max }}
+                                </span>
+                            </div>
+
+                            <div class="progress score-progress">
+                                <div class="progress-bar bg-{{ category.status }}"
+                                     style="width: {{ category.percent }}%"></div>
+                            </div>
+
+                            <details class="score-details">
+                                <summary>How these points were calculated</summary>
+                                <ul>
+                                    {% for detail in category.details %}
+                                    <li>{{ detail }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ---------- Strengths and improvements ---------- -->
+        <div class="row g-4 mb-4">
+
+            <div class="col-lg-5">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="bi bi-hand-thumbs-up text-success"></i>
+                        What you did well
+                    </div>
+                    <div class="card-body">
+                        {% if ats.strengths %}
+                        <ul class="entry-list">
+                            {% for strength in ats.strengths %}
+                            <li>
+                                <strong>{{ strength.label }}</strong> -
+                                {{ strength.score }}/{{ strength.max }}
+                                ({{ strength.percent }}%)
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted small mb-0">
+                            No category reached 80% yet. Work through the
+                            improvements on the right - they are ordered by
+                            how many points each one can win back.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">
+                            <i class="bi bi-wrench-adjustable text-warning"></i>
+                            How to improve your score
+                        </span>
+                        <span class="badge text-bg-light">
+                            {{ ats.improvements|length }} suggestion(s)
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        {% if ats.improvements %}
+                        <ol class="improve-list">
+                            <!--
+                              Only the top 8 are shown. A list of 25 tips is
+                              overwhelming and nobody acts on it. They are
+                              already sorted so the biggest point wins are first.
+                            -->
+                            {% for item in ats.improvements[:8] %}
+                            <li>
+                                <span class="improve-tag">{{ item.category }}</span>
+                                {{ item.tip }}
+                            </li>
+                            {% endfor %}
+                        </ol>
+                        {% if ats.improvements|length > 8 %}
+                        <p class="small text-muted mb-0">
+                            Showing the 8 highest-value suggestions out of
+                            {{ ats.improvements|length }}.
+                        </p>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-muted small mb-0">
+                            Excellent - we have no suggestions. Your resume
+                            scored well in every category.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!--
+          ============ JOB MATCH (Phase 6) ============
+          Only shown when the user pasted a job description. app.py sends
+          job_match=None otherwise, and this whole block is skipped.
+        -->
+        {% if job_match %}
+        <div class="row g-4 mb-4">
+
+            <!-- ---------- Match gauge ---------- -->
+            <div class="col-lg-4">
+                <div class="card app-card h-100 score-card">
+                    <div class="card-body text-center d-flex flex-column
+                                justify-content-center p-4">
+
+                        <p class="score-heading">JOB MATCH</p>
+
+                        <div class="score-ring score-ring-{{ job_match.grade_color }}"
+                             style="--value: {{ job_match.match_percent }}">
+                            <div class="score-ring-inner">
+                                <span class="score-number">{{ job_match.match_percent }}</span>
+                                <span class="score-outof">%</span>
+                            </div>
+                        </div>
+
+                        <p class="score-grade text-{{ job_match.grade_color }}">
+                            {{ job_match.grade }}
+                        </p>
+                        <p class="score-message">{{ job_match.grade_message }}</p>
+
+                        <!-- The arithmetic, so the number is checkable -->
+                        <div class="match-breakdown">
+                            <div class="d-flex justify-content-between">
+                                <span>Skills matched</span>
+                                <strong>
+                                    {{ job_match.breakdown.skills_matched }} /
+                                    {{ job_match.breakdown.skills_required }}
+                                </strong>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Keywords matched</span>
+                                <strong>
+                                    {{ job_match.breakdown.keywords_matched }} /
+                                    {{ job_match.breakdown.keywords_total }}
+                                </strong>
+                            </div>
+                            <p class="match-note mb-0">
+                                <i class="bi bi-info-circle"></i>
+                                {{ job_match.breakdown.note }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Matching vs missing ---------- -->
+            <div class="col-lg-8">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="bi bi-bullseye"></i> Resume vs Job Description
+                    </div>
+                    <div class="card-body">
+
+                        <!-- Skills you already have -->
+                        <p class="ai-block-title text-success mb-2">
+                            <i class="bi bi-check-circle-fill"></i>
+                            Matching skills ({{ job_match.matching_skills|length }})
+                        </p>
+                        {% if job_match.matching_skills %}
+                        <div class="mb-3">
+                            {% for skill in job_match.matching_skills %}
+                            <span class="chip chip-green">{{ skill }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted small mb-3">
+                            None of the skills this job asks for were found
+                            in your resume.
+                        </p>
+                        {% endif %}
+
+                        <!-- Skills the job wants that you do not show -->
+                        <p class="ai-block-title text-danger mb-2">
+                            <i class="bi bi-x-circle-fill"></i>
+                            Missing skills ({{ job_match.missing_skills|length }})
+                        </p>
+                        {% if job_match.missing_skills %}
+                        <div class="mb-3">
+                            {% for skill in job_match.missing_skills %}
+                            <span class="chip chip-red">{{ skill }}</span>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-success small mb-3">
+                            You cover every technology this job asks for.
+                        </p>
+                        {% endif %}
+
+                        <hr>
+
+                        <div class="row g-3">
+                            <!-- Keyword overlap -->
+                            <div class="col-md-6">
+                                <p class="ai-block-title mb-2">
+                                    <i class="bi bi-key text-success"></i>
+                                    Matching keywords
+                                </p>
+                                {% for word in job_match.matching_keywords %}
+                                <span class="chip chip-green">{{ word }}</span>
+                                {% else %}
+                                <p class="text-muted small">None found.</p>
+                                {% endfor %}
+                            </div>
+
+                            <div class="col-md-6">
+                                <p class="ai-block-title mb-2">
+                                    <i class="bi bi-key text-warning"></i>
+                                    Keywords to consider adding
+                                </p>
+                                {% for word in job_match.missing_keywords %}
+                                <span class="chip chip-amber">{{ word }}</span>
+                                {% else %}
+                                <p class="text-muted small">None.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <p class="small text-muted mt-3 mb-0">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Only add a keyword if it is genuinely true of
+                            your work. Stuffing a resume with words you
+                            cannot discuss in an interview backfires badly.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ---------- Learn-next + extras ---------- -->
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="bi bi-lightbulb text-warning"></i>
+                        Suggested skills to learn
+                    </div>
+                    <div class="card-body">
+                        {% if job_match.skills_to_learn %}
+                        <p class="small text-muted mb-3">
+                            Ordered by how often this job description
+                            mentions each one - learn the top items first.
+                        </p>
+                        <ul class="learn-list">
+                            {% for item in job_match.skills_to_learn %}
+                            <li>
+                                <span class="learn-rank">{{ loop.index }}</span>
+                                <span class="learn-skill">{{ item.skill }}</span>
+                                <span class="learn-count">
+                                    mentioned {{ item.mentions }}x in the job description
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-success mb-0">
+                            <i class="bi bi-check-circle-fill"></i>
+                            Nothing to learn for this role - your resume
+                            already covers every skill it asks for.
+                        </p>
+                        {% endif %}
+
+                        {% if job_match.experience_note %}
+                        <div class="alert alert-warning py-2 small mt-3 mb-0">
+                            <i class="bi bi-clock-history"></i>
+                            {{ job_match.experience_note }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="bi bi-plus-square text-primary"></i>
+                        Your extra skills
+                    </div>
+                    <div class="card-body">
+                        {% if job_match.extra_skills %}
+                        <p class="small text-muted mb-3">
+                            Skills you have that this job did not ask for.
+                            They are not wasted - mention the relevant ones
+                            in your cover letter.
+                        </p>
+                        {% for skill in job_match.extra_skills %}
+                        <span class="chip chip-blue">{{ skill }}</span>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted small mb-0">
+                            Every skill on your resume is relevant to this
+                            job description.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% elif parsed %}
+
+        <!-- No job description was pasted - invite the user to add one -->
+        <div class="card app-card mb-4 jd-prompt">
+            <div class="card-body d-flex flex-wrap align-items-center gap-3">
+                <div class="jd-prompt-icon"><i class="bi bi-bullseye"></i></div>
+                <div class="flex-grow-1">
+                    <p class="fw-semibold mb-1">Want a Job Match score?</p>
+                    <p class="small text-muted mb-0">
+                        Paste the job description you are applying for and we
+                        will show your match percentage, the skills you are
+                        missing, and what to learn first.
+                    </p>
+                </div>
+                <a href="{{ url_for('home') }}#analyze" class="btn btn-primary">
+                    <i class="bi bi-arrow-repeat"></i> Try with a job description
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!--
+          ============ AI ANALYSIS (Phase 5) ============
+          ai.source is either "ai" (a real language model answered) or
+          "offline" (no API key / the call failed, so these come from our
+          built-in rules). We always tell the user which one they got -
+          hiding that would be dishonest.
+        -->
+        {% if ai %}
+        <div class="card app-card mb-4 ai-card">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span class="fw-semibold">
+                    <i class="bi bi-robot"></i> AI Resume Review
+                </span>
+                {% if ai.source == 'ai' %}
+                <span class="badge text-bg-success">
+                    <i class="bi bi-stars"></i>
+                    AI powered &middot; {{ ai.provider }}
+                </span>
+                {% else %}
+                <span class="badge text-bg-secondary">
+                    <i class="bi bi-gear"></i> Rule-based fallback
+                </span>
+                {% endif %}
+            </div>
+
+            <div class="card-body">
+
+                <!-- Why the user is seeing rule-based output -->
+                {% if ai.message %}
+                <div class="alert alert-warning py-2 small">
+                    <i class="bi bi-info-circle-fill"></i> {{ ai.message }}
+                </div>
+                {% endif %}
+
+                <!-- Overall verdict -->
+                {% if ai.summary %}
+                <p class="ai-summary">{{ ai.summary }}</p>
+                {% endif %}
+
+                <div class="row g-4">
+
+                    <!-- Strengths -->
+                    <div class="col-md-6">
+                        <p class="ai-block-title text-success">
+                            <i class="bi bi-hand-thumbs-up-fill"></i> Strengths
+                        </p>
+                        {% if ai.strengths %}
+                        <ul class="entry-list">
+                            {% for item in ai.strengths %}
+                            <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted small">None identified.</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Weaknesses -->
+                    <div class="col-md-6">
+                        <p class="ai-block-title text-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i> Weaknesses
+                        </p>
+                        {% if ai.weaknesses %}
+                        <ul class="entry-list">
+                            {% for item in ai.weaknesses %}
+                            <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted small">
+                            No major weaknesses found.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Rewritten bullet points: the most valuable output -->
+                {% if ai.weak_bullets %}
+                <hr class="my-4">
+                <p class="ai-block-title">
+                    <i class="bi bi-pencil-fill text-primary"></i>
+                    Rewrite these lines
+                </p>
+                {% for bullet in ai.weak_bullets %}
+                <div class="rewrite-box">
+                    <div class="rewrite-row rewrite-before">
+                        <span class="rewrite-tag tag-before">Before</span>
+                        <span>{{ bullet.original }}</span>
+                    </div>
+                    <div class="rewrite-row rewrite-after">
+                        <span class="rewrite-tag tag-after">After</span>
+                        <span>{{ bullet.improved }}</span>
+                    </div>
+                    {% if bullet.why %}
+                    <p class="rewrite-why">
+                        <i class="bi bi-arrow-return-right"></i> {{ bullet.why }}
+                    </p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                <!-- Suggested professional summary -->
+                {% if ai.professional_summary %}
+                <hr class="my-4">
+                <p class="ai-block-title">
+                    <i class="bi bi-file-text text-primary"></i>
+                    Suggested professional summary
+                </p>
+                <div class="summary-box">
+                    <p class="mb-2" id="suggestedSummary">{{ ai.professional_summary }}</p>
+                    <button class="btn btn-sm btn-soft" id="copySummaryBtn">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+                {% endif %}
+
+                <!-- Action list -->
+                {% if ai.suggestions %}
+                <hr class="my-4">
+                <p class="ai-block-title">
+                    <i class="bi bi-list-ol text-primary"></i>
+                    What to do next
+                </p>
+                <ol class="improve-list">
+                    {% for item in ai.suggestions %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ol>
+                {% endif %}
+
+                <!-- Three chip lists side by side -->
+                <hr class="my-4">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <p class="ai-block-title">
+                            <i class="bi bi-plus-circle text-primary"></i>
+                            Skills to add
+                        </p>
+                        {% for skill in ai.missing_skills %}
+                        <span class="chip chip-red">{{ skill }}</span>
+                        {% else %}
+                        <p class="text-muted small">None suggested.</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="col-md-4">
+                        <p class="ai-block-title">
+                            <i class="bi bi-lightning text-primary"></i>
+                            Action verbs to use
+                        </p>
+                        {% for verb in ai.action_verbs %}
+                        <span class="chip chip-blue">{{ verb }}</span>
+                        {% else %}
+                        <p class="text-muted small">None suggested.</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="col-md-4">
+                        <p class="ai-block-title">
+                            <i class="bi bi-key text-primary"></i>
+                            Keywords to add
+                        </p>
+                        {% for keyword in ai.keywords %}
+                        <span class="chip chip-amber">{{ keyword }}</span>
+                        {% else %}
+                        <p class="text-muted small">None suggested.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Cliches found -->
+                {% if ai.generic_statements %}
+                <hr class="my-4">
+                <p class="ai-block-title">
+                    <i class="bi bi-eraser text-warning"></i>
+                    Generic phrases to replace
+                </p>
+                <p class="small text-muted mb-2">
+                    These appear on thousands of resumes and tell a recruiter
+                    nothing. Replace each one with a specific example.
+                </p>
+                {% for phrase in ai.generic_statements %}
+                <span class="chip chip-amber">"{{ phrase }}"</span>
+                {% endfor %}
+                {% endif %}
+
+            </div>
+
+            <div class="card-footer bg-white small text-muted">
+                <i class="bi bi-shield-check"></i>
+                Your email, phone number and profile links are replaced with
+                placeholders before anything is sent to the AI provider.
+                {% if ai.source == 'ai' %}
+                Model used: <code>{{ ai.model }}</code>.
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ---------- Phase notice ---------- -->
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle-fill"></i>
+            <strong>Phase 5 checkpoint.</strong>
+            Your resume is parsed, scored and reviewed. Job description
+            matching is added in the next phase.
+        </div>
+
+        <!--
+          ============ ANALYSIS (Phase 3) ============
+          Everything below only renders if parse_resume() succeeded.
+          If it failed, app.py passes parsed=None and we skip straight to
+          the extracted text, so the user still gets something useful.
+        -->
+        {% if parsed %}
+
+        <div class="row g-4 mb-4">
+
+            <!-- ---------- Contact information ---------- -->
+            <div class="col-lg-5">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="bi bi-person-vcard"></i> Contact Information
+                    </div>
+                    <div class="card-body">
+                        <ul class="info-list">
+                            <!--
+                              A Jinja "for" loop over a list of pairs keeps this
+                              short. Writing six near-identical blocks by hand
+                              would be repetitive and hard to change later.
+                            -->
+                            {% set contact_fields = [
+                                ('person',        'Name',      parsed.contact.name),
+                                ('envelope',      'Email',     parsed.contact.email),
+                                ('telephone',     'Phone',     parsed.contact.phone),
+                                ('linkedin',      'LinkedIn',  parsed.contact.linkedin),
+                                ('github',        'GitHub',    parsed.contact.github),
+                                ('globe',         'Portfolio', parsed.contact.portfolio)
+                            ] %}
+
+                            {% for icon, label, value in contact_fields %}
+                            <li class="info-row">
+                                <span class="info-label">
+                                    <i class="bi bi-{{ icon }}"></i> {{ label }}
+                                </span>
+                                <span class="info-value">
+                                    {% if value %}
+                                        {% if value.startswith('http') %}
+                                            <a href="{{ value }}" target="_blank"
+                                               rel="noopener noreferrer">{{ value }}</a>
+                                        {% else %}
+                                            {{ value }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-missing">Not found</span>
+                                    {% endif %}
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+
+                        {% if not parsed.contact.linkedin or not parsed.contact.github %}
+                        <p class="small text-muted mt-3 mb-0">
+                            <i class="bi bi-lightbulb"></i>
+                            Adding a LinkedIn and GitHub link makes a fresher
+                            resume noticeably stronger.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Resume sections ---------- -->
+            <div class="col-lg-7">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">
+                            <i class="bi bi-list-check"></i> Resume Sections
+                        </span>
+                        <span class="badge text-bg-light">
+                            {{ parsed.stats.sections_present }} /
+                            {{ parsed.stats.sections_total }} found
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            {% for section in parsed.sections.present %}
+                            <div class="col-sm-6">
+                                <div class="section-pill section-present">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    {{ section.label }}
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            {% for section in parsed.sections.missing %}
+                            <div class="col-sm-6">
+                                <div class="section-pill section-missing">
+                                    <i class="bi bi-x-circle"></i>
+                                    {{ section.label }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        {% if parsed.sections.missing %}
+                        <div class="alert alert-warning mt-3 mb-0 py-2 small">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Missing:
+                            {% for section in parsed.sections.missing %}
+                                <strong>{{ section.label }}</strong>{% if not loop.last %}, {% endif %}
+                            {% endfor %}.
+                            Adding these usually improves your ATS score.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!--
+          ============ CHARTS (Phase 8) ============
+          The data is written into the page as JSON below, and
+          static/js/charts.js reads it from there.
+
+          Why a <script type="application/json"> tag instead of writing
+          the numbers into a JavaScript statement? Because the browser
+          never EXECUTES this tag - it is inert data. A skill name
+          containing a quote or an angle bracket can therefore never
+          escape into our code. The |tojson filter also escapes the
+          characters that could end the script tag early.
+        -->
+        {% if chart_data %}
+        <script type="application/json" id="chartData">{{ chart_data|tojson }}</script>
+
+        <div class="row g-4 mb-4">
+
+            <!-- ---------- Skills by category ---------- -->
+            <div class="col-lg-{% if chart_data.scoreHistory %}6{% else %}12{% endif %}">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white">
+                        <span class="fw-semibold">
+                            <i class="bi bi-bar-chart"></i>
+                            Skills found, by category
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        {% if parsed.skills.by_category %}
+                        <!--
+                          The canvas has a sized wrapper around it.
+                          Chart.js resizes to its container, and without a
+                          fixed height the canvas grows forever on every
+                          redraw - a classic Chart.js bug.
+                        -->
+                        <div class="chart-box">
+                            <canvas id="skillsChart"
+                                    aria-label="Bar chart of technical skills found in each category"
+                                    role="img"></canvas>
+                        </div>
+
+                        <!--
+                          The table twin. A chart that can only be read by
+                          hovering excludes screen-reader and keyboard
+                          users, so every value is also available here.
+                        -->
+                        <details class="chart-table">
+                            <summary>View as a table</summary>
+                            <table class="table table-sm mt-2 mb-0">
+                                <thead>
+                                    <tr><th>Category</th><th class="text-end">Skills</th></tr>
+                                </thead>
+                                <tbody>
+                                    {% for category, items in parsed.skills.by_category.items() %}
+                                    <tr>
+                                        <td>{{ category }}</td>
+                                        <td class="text-end">{{ items|length }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </details>
+                        {% else %}
+                        <p class="text-muted mb-0">
+                            No skills were recognised, so there is nothing
+                            to chart yet.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- ---------- Score over time ---------- -->
+            <!--
+              Only rendered with 2+ past uploads. One point is not a
+              trend, and a chart of a single dot is worse than no chart.
+              It also needs MySQL to be switched on.
+            -->
+            {% if chart_data.scoreHistory %}
+            <div class="col-lg-6">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white">
+                        <span class="fw-semibold">
+                            <i class="bi bi-graph-up-arrow"></i>
+                            Your ATS score over time
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-box">
+                            <canvas id="historyChart"
+                                    aria-label="Line chart of your ATS score across past uploads"
+                                    role="img"></canvas>
+                        </div>
+
+                        <details class="chart-table">
+                            <summary>View as a table</summary>
+                            <table class="table table-sm mt-2 mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Uploaded</th>
+                                        <th>File</th>
+                                        <th class="text-end">ATS</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for point in chart_data.scoreHistory %}
+                                    <tr>
+                                        <td>{{ point.date }}</td>
+                                        <td class="small">{{ point.file }}</td>
+                                        <td class="text-end">{{ point.score }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </details>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- ---------- Technical skills ---------- -->
+        <div class="card app-card mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
+                    <i class="bi bi-cpu"></i> Technical Skills
+                </span>
+                <span class="badge text-bg-primary">
+                    {{ parsed.skills.technical_count }} found
+                </span>
+            </div>
+            <div class="card-body">
+                {% if parsed.skills.by_category %}
+                    {% for category, skill_list in parsed.skills.by_category.items() %}
+                    <div class="skill-group">
+                        <p class="skill-group-title">{{ category }}</p>
+                        <div>
+                            {% for skill in skill_list %}
+                            <span class="chip chip-green">{{ skill }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted mb-0">
+                        No technical skills were recognised. Make sure your
+                        resume has a clear <strong>Technical Skills</strong>
+                        section listing your tools and languages.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ---------- Soft skills ---------- -->
+        <div class="card app-card mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
+                    <i class="bi bi-people"></i> Soft Skills
+                </span>
+                <span class="badge text-bg-light">
+                    {{ parsed.skills.soft_count }} found
+                </span>
+            </div>
+            <div class="card-body">
+                {% if parsed.skills.soft %}
+                    {% for skill in parsed.skills.soft %}
+                    <span class="chip chip-blue">{{ skill }}</span>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted mb-0">
+                        No soft skills detected. Try describing them through
+                        actions, for example
+                        <em>"Collaborated with a team of 5 engineers"</em>
+                        rather than just listing the word.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ---------- What we found in each section ---------- -->
+        <div class="row g-4 mb-4">
+            {% set detail_blocks = [
+                ('mortarboard', 'Education',      parsed.education.entries),
+                ('kanban',      'Projects',       parsed.projects.entries),
+                ('patch-check', 'Certifications', parsed.certifications.entries),
+                ('briefcase',   'Experience',     parsed.experience.entries),
+                ('trophy',      'Achievements',   parsed.achievements.entries)
+            ] %}
+
+            {% for icon, label, entries in detail_blocks %}
+            <div class="col-lg-6">
+                <div class="card app-card h-100">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold">
+                            <i class="bi bi-{{ icon }}"></i> {{ label }}
+                        </span>
+                        <span class="badge text-bg-light">{{ entries|length }}</span>
+                    </div>
+                    <div class="card-body">
+                        {% if entries %}
+                        <ul class="entry-list">
+                            {% for entry in entries %}
+                            <li>{{ entry }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted small mb-0">
+                            Nothing found for this section.
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- ---------- Quick writing quality numbers ---------- -->
+        <div class="card app-card mb-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-pencil-square"></i> Writing Signals
+            </div>
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-6 col-md-3">
+                        <div class="mini-stat">{{ parsed.stats.bullet_count }}</div>
+                        <div class="stat-label">Bullet points</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="mini-stat">{{ parsed.stats.action_verb_count }}</div>
+                        <div class="stat-label">Action verbs used</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="mini-stat">{{ parsed.projects.quantified_count }}</div>
+                        <div class="stat-label">Projects with numbers</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="mini-stat">{{ parsed.stats.word_count }}</div>
+                        <div class="stat-label">Total words</div>
+                    </div>
+                </div>
+                <p class="small text-muted mt-3 mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    These numbers feed the ATS score we build in Phase 4.
+                    Resumes with measurable results
+                    (<em>"reduced load time by 40%"</em>) score higher than
+                    vague ones (<em>"improved performance"</em>).
+                </p>
+            </div>
+        </div>
+
+        {% endif %}
+
+        <!-- ---------- Extracted text ---------- -->
+        <div class="card app-card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
+                    <i class="bi bi-body-text"></i> Extracted text
+                </span>
+                <button class="btn btn-sm btn-soft" id="copyTextBtn">
+                    <i class="bi bi-clipboard"></i> Copy
+                </button>
+            </div>
+            <div class="card-body">
+                <!--
+                  <pre> keeps line breaks and spacing exactly as they are.
+                  The |e filter is Jinja's HTML escape. It converts
+                  characters like < and > into &lt; and &gt; so that text
+                  inside someone's resume can never be executed as HTML or
+                  JavaScript. This prevents an XSS attack.
+                  (Jinja escapes by default here, but writing it makes the
+                  intention obvious when you explain the code.)
+                -->
+                <pre class="extracted-text" id="extractedText">{{ extracted_text|e }}</pre>
+            </div>
+        </div>
+
+        <!-- ---------- Job description echo (only if provided) ---------- -->
+        {% if job_description %}
+        <div class="card app-card mt-4">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-briefcase"></i> Job description you entered
+            </div>
+            <div class="card-body">
+                <pre class="extracted-text">{{ job_description|e }}</pre>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</section>
+{% endblock %}
+
+
+<!--
+  Page-specific JavaScript.
+  base.html declares an empty "scripts" block at the bottom of <body>,
+  and the block below fills it. Putting the script here (instead of in
+  script.js) keeps code that is needed on ONE page out of every other page.
+
+  Reminder: never write a real Jinja tag inside an HTML comment - Jinja
+  runs its tags before the browser ever sees the comment.
+-->
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+    /**
+     * Copy the text of one element to the clipboard and confirm on the button.
+     *
+     * Written once and reused twice - the extracted text and the suggested
+     * professional summary both need exactly this behaviour.
+     */
+    function wireCopyButton(buttonId, sourceId) {
+        const button = document.getElementById(buttonId);
+        const source = document.getElementById(sourceId);
+
+        // The summary block only exists when the AI returned one, so we
+        // check before attaching - otherwise the script would crash and
+        // the extracted-text copy button would stop working too.
+        if (!button || !source) {
+            return;
+        }
+
+        button.addEventListener("click", function () {
+            navigator.clipboard.writeText(source.innerText).then(function () {
+                button.innerHTML = '<i class="bi bi-check2"></i> Copied';
+                setTimeout(function () {
+                    button.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+                }, 2000);
+            }).catch(function () {
+                button.innerHTML = 'Copy failed';
+            });
+        });
+    }
+
+    wireCopyButton("copyTextBtn", "extractedText");
+    wireCopyButton("copySummaryBtn", "suggestedSummary");
+</script>
+{% endblock %}

@@ -1,0 +1,273 @@
+<!--
+  history.html
+  ============
+  Shows the analyses saved in MySQL.
+
+  This page has two very different states:
+
+    1. Database connected  -> totals + a table of recent analyses
+    2. Database off/down   -> a friendly setup guide instead
+
+  Building state 2 properly matters. A page that simply crashes when a
+  service is unavailable is a page that will fail during your demo.
+-->
+{% extends "base.html" %}
+
+{% block title %}Analysis History | AI Resume Analyzer{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="container">
+
+        <!-- ---------- Heading ---------- -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+            <div>
+                <h1 class="section-title mb-1">Analysis History</h1>
+                <p class="text-muted mb-0">
+                    Every resume analysed by this application, newest first.
+                </p>
+            </div>
+            <a href="{{ url_for('home') }}" class="btn btn-primary">
+                <i class="bi bi-cloud-arrow-up"></i> Analyze a new resume
+            </a>
+        </div>
+
+        {% if connected %}
+
+        <!-- ---------- Totals ---------- -->
+        {% if stats %}
+        <div class="row g-3 mb-4">
+            {% set tiles = [
+                ('people',       'icon-blue',   stats.total_users,    'Users'),
+                ('file-earmark', 'icon-purple', stats.total_resumes,  'Resumes'),
+                ('graph-up',     'icon-green',  stats.total_analyses, 'Analyses'),
+                ('speedometer2', 'icon-orange', stats.average_ats,    'Average ATS score')
+            ] %}
+            {% for icon, colour, value, label in tiles %}
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <div class="stat-icon {{ colour }}">
+                        <i class="bi bi-{{ icon }}"></i>
+                    </div>
+                    <!--
+                      "or 0" handles the very first run, when AVG() over an
+                      empty table returns NULL and Jinja would print "None".
+                    -->
+                    <div class="stat-value">{{ value or 0 }}</div>
+                    <div class="stat-label">{{ label }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- ---------- Score distribution chart ---------- -->
+        <!--
+          MySQL does the binning with CASE + GROUP BY, so it sends back
+          five rows instead of every score in the table. See
+          database/db.py get_score_distribution().
+        -->
+        {% if distribution and stats and stats.total_resumes %}
+        <script type="application/json" id="distributionData">{{ distribution|tojson }}</script>
+
+        <div class="card app-card mb-4">
+            <div class="card-header bg-white">
+                <span class="fw-semibold">
+                    <i class="bi bi-bar-chart"></i>
+                    How the ATS scores are spread
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="chart-box chart-box-sm">
+                    <canvas id="distributionChart"
+                            aria-label="Bar chart of how many resumes fall into each ATS grade band"
+                            role="img"></canvas>
+                </div>
+
+                <details class="chart-table">
+                    <summary>View as a table</summary>
+                    <table class="table table-sm mt-2 mb-0">
+                        <thead>
+                            <tr><th>Grade band</th><th class="text-end">Resumes</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in distribution %}
+                            <tr>
+                                <td>{{ row.band }}</td>
+                                <td class="text-end">{{ row.total }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </details>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ---------- The table ---------- -->
+        <div class="card app-card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">
+                    <i class="bi bi-clock-history"></i> Recent analyses
+                </span>
+                <span class="badge text-bg-light">{{ rows|length }} shown</span>
+            </div>
+            <div class="card-body p-0">
+                {% if rows %}
+                <!--
+                  table-responsive lets the table scroll sideways on a
+                  phone instead of breaking the page layout.
+                -->
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle history-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Candidate</th>
+                                <th>File</th>
+                                <th class="text-center">ATS</th>
+                                <th class="text-center">Job Match</th>
+                                <th class="text-center">Source</th>
+                                <th>When</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td class="text-muted">{{ row.analysis_id }}</td>
+
+                                <td>
+                                    <div class="fw-semibold">
+                                        {{ row.user_name or 'Unknown' }}
+                                    </div>
+                                    <div class="small text-muted">
+                                        {{ row.user_email }}
+                                    </div>
+                                </td>
+
+                                <td class="small">
+                                    <i class="bi bi-file-earmark-pdf text-danger"></i>
+                                    {{ row.file_name or '-' }}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if row.ats_score is not none %}
+                                    <span class="score-badge
+                                        {% if row.ats_score >= 70 %}badge-good
+                                        {% elif row.ats_score >= 50 %}badge-mid
+                                        {% else %}badge-low{% endif %}">
+                                        {{ row.ats_score }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if row.job_match_score is not none %}
+                                    <span class="score-badge
+                                        {% if row.job_match_score >= 60 %}badge-good
+                                        {% elif row.job_match_score >= 40 %}badge-mid
+                                        {% else %}badge-low{% endif %}">
+                                        {{ row.job_match_score }}%
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="text-center">
+                                    {% if row.ai_source == 'ai' %}
+                                    <span class="badge text-bg-success">AI</span>
+                                    {% else %}
+                                    <span class="badge text-bg-secondary">Rules</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="small text-muted">
+                                    {{ row.created_at.strftime('%d %b %Y, %H:%M')
+                                       if row.created_at else '-' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-5 text-center">
+                    <i class="bi bi-inbox empty-icon"></i>
+                    <p class="fw-semibold mb-1">Nothing saved yet</p>
+                    <p class="text-muted small mb-3">
+                        The database is connected but empty. Analyse a resume
+                        and it will appear here.
+                    </p>
+                    <a href="{{ url_for('home') }}" class="btn btn-primary">
+                        Analyze a resume
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% else %}
+
+        <!-- ---------- Database not connected: show a setup guide ---------- -->
+        <div class="card app-card">
+            <div class="card-body p-4 p-md-5">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div class="feature-icon icon-orange mb-0">
+                        <i class="bi bi-database-exclamation"></i>
+                    </div>
+                    <div>
+                        <h2 class="h5 fw-bold mb-1">Database not connected</h2>
+                        <p class="text-muted small mb-0">{{ db_message }}</p>
+                    </div>
+                </div>
+
+                <p class="mb-3">
+                    Everything else still works - analysis just is not being
+                    saved. To turn history on:
+                </p>
+
+                <ol class="setup-list">
+                    <li>
+                        Start MySQL. On Windows this needs an
+                        <strong>Administrator</strong> terminal.
+                        <br>
+                        <code>net start MySQL80</code>
+                    </li>
+                    <li>
+                        Fill in your MySQL details in <code>.env</code>.
+                        <br>
+                        <code>DB_ENABLED=true</code><br>
+                        <code>DB_USER=root</code><br>
+                        <code>DB_PASSWORD=your_password</code>
+                    </li>
+                    <li>
+                        Create the database and tables.
+                        <br>
+                        <code>python -m database.db --init</code>
+                        <br>
+                        <span class="small text-muted">
+                            Use this rather than
+                            <code>mysql -u root -p &lt; sql/schema.sql</code>:
+                            PowerShell has no <code>&lt;</code> redirection
+                            operator, so that form fails with
+                            "The '&lt;' operator is reserved for future use."
+                        </span>
+                    </li>
+                    <li>
+                        Check the connection.
+                        <br>
+                        <code>python -m database.db --check</code>
+                    </li>
+                    <li>Restart the app.</li>
+                </ol>
+            </div>
+        </div>
+
+        {% endif %}
+
+    </div>
+</section>
+{% endblock %}

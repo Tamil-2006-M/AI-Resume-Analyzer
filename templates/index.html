@@ -1,0 +1,356 @@
+<!--
+  index.html
+  ==========
+  The Home / landing page of the project.
+
+  It "extends" base.html, so it only contains the middle part of the page.
+  Sections on this page:
+    1. Hero         - big title + short description + main buttons
+    2. Analyze      - upload box + job description box (wired up in Phase 2)
+    3. How it works - 4 simple steps
+    4. Features     - cards describing what the tool does
+-->
+{% extends "base.html" %}
+
+{% block title %}AI Resume Analyzer | Check your resume score instantly{% endblock %}
+
+{% block content %}
+
+<!-- ============================ HERO ============================ -->
+<section class="hero">
+    <div class="container">
+        <div class="row align-items-center g-5">
+
+            <!-- Left column: text -->
+            <div class="col-lg-6">
+                <span class="badge-soft mb-3">
+                    <i class="bi bi-stars"></i> Powered by Python, NLP &amp; AI
+                </span>
+
+                <h1 class="hero-title">
+                    Is your resume good enough to
+                    <span class="text-gradient">pass the ATS?</span>
+                </h1>
+
+                <p class="hero-text">
+                    Upload your resume as a PDF and get an instant, easy-to-read
+                    report: an estimated ATS-style score, the skills we found,
+                    the sections you are missing, how well you match a job
+                    description, and clear AI suggestions to improve it.
+                </p>
+
+                <div class="d-flex flex-wrap gap-3 mb-4">
+                    <a href="#analyze" class="btn btn-primary btn-lg px-4">
+                        <i class="bi bi-cloud-arrow-up"></i> Upload Resume
+                    </a>
+                    <a href="#how-it-works" class="btn btn-soft btn-lg px-4">
+                        How it works
+                    </a>
+                </div>
+
+                <!-- Small trust / info line -->
+                <p class="small text-muted mb-0">
+                    <i class="bi bi-shield-check"></i>
+                    PDF only &middot; Maximum 5&nbsp;MB &middot; Your file stays on your own server
+                </p>
+            </div>
+
+            <!-- Right column: a preview card showing what the result looks like -->
+            <div class="col-lg-6">
+                <div class="preview-card">
+                    <div class="preview-head">
+                        <span class="dot dot-red"></span>
+                        <span class="dot dot-yellow"></span>
+                        <span class="dot dot-green"></span>
+                        <span class="preview-title">Your Report</span>
+                    </div>
+
+                    <div class="preview-body">
+                        <!-- ATS score block -->
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="preview-label">ATS Score</span>
+                            <span class="preview-value">78 / 100</span>
+                        </div>
+                        <div class="progress mb-4">
+                            <div class="progress-bar bg-success" style="width: 78%"></div>
+                        </div>
+
+                        <!-- Job match block -->
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="preview-label">Job Match</span>
+                            <span class="preview-value">72%</span>
+                        </div>
+                        <div class="progress mb-4">
+                            <div class="progress-bar bg-info" style="width: 72%"></div>
+                        </div>
+
+                        <!-- Skills found -->
+                        <p class="preview-label mb-2">Skills found</p>
+                        <div class="mb-3">
+                            <span class="chip chip-green">Python</span>
+                            <span class="chip chip-green">SQL</span>
+                            <span class="chip chip-green">Git</span>
+                            <span class="chip chip-green">HTML</span>
+                        </div>
+
+                        <!-- Missing skills -->
+                        <p class="preview-label mb-2">Missing skills</p>
+                        <div>
+                            <span class="chip chip-red">Flask</span>
+                            <span class="chip chip-red">REST API</span>
+                            <span class="chip chip-red">AWS</span>
+                        </div>
+                    </div>
+
+                    <div class="preview-foot">
+                        <i class="bi bi-info-circle"></i>
+                        Sample report. Your real numbers appear after you upload.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+
+<!-- ========================= ANALYZE FORM ========================= -->
+<section id="analyze" class="section">
+    <div class="container">
+        <div class="section-head text-center">
+            <h2 class="section-title">Analyze your resume</h2>
+            <p class="section-sub">
+                Choose your PDF resume and (optionally) paste the job description
+                you are applying for.
+            </p>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-9">
+                <div class="card app-card">
+                    <div class="card-body p-4 p-md-5">
+
+                        <!--
+                          The form sends the file to the /upload route in app.py.
+
+                          Three attributes matter here:
+                            action  - which URL receives the data
+                            method  - POST, because we are sending a file, and
+                                      a GET request cannot carry one
+                            enctype - multipart/form-data. WITHOUT this the
+                                      browser sends only the file NAME, not the
+                                      file itself. This is the single most
+                                      common file-upload bug.
+                        -->
+                        <form id="analyzeForm"
+                              action="{{ url_for('upload') }}"
+                              method="POST"
+                              enctype="multipart/form-data"
+                              novalidate>
+
+                            <!--
+                              CSRF token.
+
+                              This hidden field carries a secret that
+                              only our own session knows. app.py checks
+                              it on every POST, so a form on another
+                              website cannot submit to our /upload route
+                              using your browser's cookies.
+                            -->
+                            <input type="hidden" name="csrf_token"
+                                   value="{{ csrf_token() }}">
+
+                            <!-- ---------- Resume file input ---------- -->
+                            <label class="form-label fw-semibold">
+                                1. Upload your resume (PDF only)
+                            </label>
+
+                            <!-- A styled drop area. Clicking it opens the file picker. -->
+                            <label for="resumeFile" class="dropzone" id="dropzone">
+                                <i class="bi bi-file-earmark-pdf dropzone-icon"></i>
+                                <span class="dropzone-title" id="dropzoneTitle">
+                                    Click to choose a PDF file
+                                </span>
+                                <span class="dropzone-sub">
+                                    or drag and drop it here &middot; max 5 MB
+                                </span>
+                            </label>
+
+                            <input class="d-none" type="file" id="resumeFile"
+                                   name="resume" accept="application/pdf">
+
+                            <!-- Small area where JavaScript shows validation messages -->
+                            <div id="fileFeedback" class="form-hint"></div>
+
+                            <!-- ---------- Job description input ---------- -->
+                            <label for="jobDescription" class="form-label fw-semibold mt-4">
+                                2. Paste the Job Description
+                                <span class="text-muted fw-normal">(optional)</span>
+                            </label>
+                            <textarea class="form-control" id="jobDescription"
+                                      name="job_description" rows="6"
+                                      placeholder="Example: Looking for a Python developer with Flask, SQL, REST API, Git and AWS knowledge..."></textarea>
+                            <div class="d-flex justify-content-between form-hint">
+                                <span>Adding this unlocks the Job Match score.</span>
+                                <span><span id="jdCount">0</span> characters</span>
+                            </div>
+
+                            <!-- ---------- Submit button ---------- -->
+                            <div class="d-grid mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg"
+                                        id="analyzeBtn" disabled>
+                                    <i class="bi bi-magic"></i> Analyze Resume
+                                </button>
+                            </div>
+
+                            <p class="text-center small text-muted mt-3 mb-0">
+                                <i class="bi bi-lock"></i>
+                                Your file is checked for type and size before it is stored.
+                            </p>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ========================= HOW IT WORKS ========================= -->
+<section id="how-it-works" class="section section-alt">
+    <div class="container">
+        <div class="section-head text-center">
+            <h2 class="section-title">How it works</h2>
+            <p class="section-sub">Four simple steps, about ten seconds.</p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h3 class="step-title">Upload</h3>
+                    <p class="step-text">
+                        You select a PDF resume. We check the file type and size
+                        before accepting it.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h3 class="step-title">Extract</h3>
+                    <p class="step-text">
+                        PyMuPDF reads the PDF page by page and turns it into
+                        clean, plain text.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h3 class="step-title">Analyze</h3>
+                    <p class="step-text">
+                        Python finds your contact details, sections and skills,
+                        then an LLM reviews the content.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <h3 class="step-title">Improve</h3>
+                    <p class="step-text">
+                        You get scores, missing items and specific suggestions
+                        you can act on today.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- ========================== FEATURES ========================== -->
+<section id="features" class="section">
+    <div class="container">
+        <div class="section-head text-center">
+            <h2 class="section-title">What you get</h2>
+            <p class="section-sub">Everything in one clean dashboard.</p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon icon-blue"><i class="bi bi-speedometer2"></i></div>
+                    <h3 class="feature-title">ATS-style Score</h3>
+                    <p class="feature-text">
+                        An estimated score out of 100 built from contact info,
+                        skills, education, projects, keywords and structure.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon icon-purple"><i class="bi bi-diagram-3"></i></div>
+                    <h3 class="feature-title">Skill Extraction</h3>
+                    <p class="feature-text">
+                        Technical and soft skills pulled out of your resume and
+                        grouped into languages, web, databases, cloud and AI/ML.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon icon-green"><i class="bi bi-list-check"></i></div>
+                    <h3 class="feature-title">Section Check</h3>
+                    <p class="feature-text">
+                        See at a glance which standard resume sections are
+                        present and which ones you forgot.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon icon-orange"><i class="bi bi-bullseye"></i></div>
+                    <h3 class="feature-title">Job Match %</h3>
+                    <p class="feature-text">
+                        Paste a job description and see how closely your resume
+                        matches it, plus the skills you should add.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon icon-pink"><i class="bi bi-robot"></i></div>
+                    <h3 class="feature-title">AI Suggestions</h3>
+                    <p class="feature-text">
+                        An LLM points out weak project descriptions, generic
+                        lines and better action verbs to use.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <div class="feature-icon icon-teal"><i class="bi bi-bar-chart-line"></i></div>
+                    <h3 class="feature-title">Visual Dashboard</h3>
+                    <p class="feature-text">
+                        Charts and progress bars so you understand the result
+                        without reading a wall of text.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Honest disclaimer - important to mention in a project report -->
+        <div class="alert alert-warning mt-5 mb-0" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <strong>Please note:</strong> the ATS score produced here is an
+            <em>estimated, ATS-style</em> score created by this project's own
+            rules. It is not the score of any specific company's applicant
+            tracking system.
+        </div>
+    </div>
+</section>
+
+{% endblock %}

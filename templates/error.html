@@ -1,0 +1,37 @@
+<!--
+  error.html
+  ==========
+  One single page used for ALL error codes (404, 500, ...).
+
+  app.py passes two variables into it:
+      code    -> the HTTP status number, e.g. 404
+      message -> a short, friendly sentence for the user
+
+  We never print the real Python exception here. Showing internal errors
+  to a visitor is a security problem (it can leak file paths, library
+  versions and database details).
+-->
+{% extends "base.html" %}
+
+{% block title %}Error {{ code }} | AI Resume Analyzer{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-6 text-center">
+
+                <div class="error-code">{{ code }}</div>
+
+                <h1 class="section-title mb-3">Oops!</h1>
+                <p class="section-sub mb-4">{{ message }}</p>
+
+                <a href="{{ url_for('home') }}" class="btn btn-primary btn-lg px-4">
+                    <i class="bi bi-house"></i> Back to Home
+                </a>
+
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

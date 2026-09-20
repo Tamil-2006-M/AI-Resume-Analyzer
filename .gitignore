@@ -1,0 +1,47 @@
+# ==================================================================
+# .gitignore - files Git should NEVER upload to GitHub
+# ==================================================================
+
+# ---- Secrets -----------------------------------------------------
+# The real environment file with API keys and DB passwords.
+# .env.example IS committed so other people know which keys are needed.
+.env
+*.env
+!.env.example
+
+# ---- Python virtual environment ----------------------------------
+venv/
+env/
+.venv/
+
+# ---- Python cache / build files ----------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# ---- Uploaded resumes (private user data, can be large) ----------
+uploads/*
+!uploads/.gitkeep
+
+# ---- Logs --------------------------------------------------------
+*.log
+logs/
+
+# ---- Editor / OS junk --------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---- Testing -----------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---- Deployment / OS extras ----
+instance/
+*.sqlite3
+.venv*/
