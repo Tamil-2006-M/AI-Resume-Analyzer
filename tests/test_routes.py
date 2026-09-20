@@ -129,6 +129,32 @@ class TestResultPage:
         assert "ESTIMATED ATS SCORE" in html
         assert "score-ring" in html
 
+    def test_the_score_carries_its_disclaimer(self, upload):
+        """
+        DO NOT DELETE THIS DISCLAIMER.
+
+        The project brief requires it, and it is simply honest: this
+        score comes from our own published rules, not from Workday,
+        Taleo, Greenhouse or any other real ATS. Presenting an invented
+        number as a real company's verdict would mislead someone about
+        their job prospects.
+
+        This test exists because a very similar-looking leftover banner
+        was correctly removed from this page, and the next person
+        tidying up could easily remove this one too.
+        """
+        import re
+        html = upload("good.pdf").get_data(as_text=True)
+
+        # The sentence is wrapped across several lines in the template,
+        # so collapse all whitespace before looking for it. Asserting on
+        # the raw HTML would break the moment someone re-indents the file.
+        flat = re.sub(r"\s+", " ", html).lower()
+
+        assert "score-disclaimer" in html
+        assert "estimated" in flat
+        assert "not the score of any specific company" in flat
+
     def test_shows_skills_and_sections(self, upload):
         html = upload("good.pdf").get_data(as_text=True)
         assert "Technical Skills" in html
