@@ -52,6 +52,7 @@ import os
 import re
 import json
 import logging
+import time
 
 import requests
 
@@ -325,20 +326,25 @@ class BaseProvider:
         Every provider's errors end up looking the same to the rest of the
         program, so app.py only needs to handle one exception type.
         """
-        try:
-            response = requests.post(url, headers=headers, json=payload,
-                                     timeout=AI_TIMEOUT)
-        except requests.exceptions.Timeout as error:
-            raise LLMError(
-                f"The AI service did not respond within {AI_TIMEOUT} seconds."
-            ) from error
-        except requests.exceptions.ConnectionError as error:
-            raise LLMError(
-                "Could not reach the AI service. Check your internet "
-                "connection."
-            ) from error
-        except requests.exceptions.RequestException as error:
-            raise LLMError("The AI request failed.") from error
+        for attempt in range(3):
+            try:
+                response = requests.post(url, headers=headers, json=payload,
+                                         timeout=AI_TIMEOUT)
+            except requests.exceptions.Timeout as error:
+                raise LLMError(
+                    f"The AI service did not respond within {AI_TIMEOUT} seconds."
+                ) from error
+            except requests.exceptions.ConnectionError as error:
+                raise LLMError(
+                    "Could not reach the AI service. Check your internet "
+                    "connection."
+                ) from error
+            except requests.exceptions.RequestException as error:
+                raise LLMError("The AI request failed.") from error
+
+            if response.status_code != 503 or attempt == 2:
+                break
+            time.sleep(1 << attempt)
 
         if response.status_code == 401 or response.status_code == 403:
             raise LLMError("The AI API key was rejected. Check your .env file.")
