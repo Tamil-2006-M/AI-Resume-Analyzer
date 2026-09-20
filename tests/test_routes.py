@@ -81,7 +81,7 @@ class TestUploadValidation:
     def test_a_good_pdf_is_accepted(self, upload):
         response = upload("good.pdf")
         assert response.status_code == 200
-        assert "Text extracted successfully" in response.get_data(as_text=True)
+        assert "Your resume report" in response.get_data(as_text=True)
 
     @pytest.mark.parametrize("filename", [
         "scanned.pdf",     # no text - a scan
@@ -212,3 +212,27 @@ class TestJobDescriptionLimits:
         response = upload("good.pdf",
                           job_description="Python разработчик 🚀 Flask 日本")
         assert response.status_code == 200
+
+
+class TestNoLeftoverDevelopmentText:
+    """
+    The result page was built in ten phases, and each phase left a
+    "Phase N checkpoint" note behind. One survived to the finished app
+    and told users that job description matching was "added in the next
+    phase" - which was both confusing and false.
+
+    This test makes sure build-time language can never reach a user again.
+    """
+
+    def test_no_phase_numbers_are_shown_to_the_user(self, upload):
+        import re
+        html = upload("good.pdf").get_data(as_text=True)
+
+        # HTML comments are fine - they document the build history and
+        # the browser never displays them. Strip them, then check what
+        # a visitor would actually read.
+        visible = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+        assert not re.search(r"[Pp]hase\s+\d+", visible)
+
+    def test_no_checkpoint_banner(self, upload):
+        assert "checkpoint" not in upload("good.pdf").get_data(as_text=True).lower()

@@ -24,7 +24,7 @@
         <!-- ---------- Page heading ---------- -->
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
             <div>
-                <h1 class="section-title mb-1">Text extracted successfully</h1>
+                <h1 class="section-title mb-1">Your resume report</h1>
                 <p class="text-muted mb-0">
                     <i class="bi bi-file-earmark-pdf text-danger"></i>
                     {{ original_name }}
@@ -734,14 +734,6 @@
         </div>
         {% endif %}
 
-        <!-- ---------- Phase notice ---------- -->
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle-fill"></i>
-            <strong>Phase 5 checkpoint.</strong>
-            Your resume is parsed, scored and reviewed. Job description
-            matching is added in the next phase.
-        </div>
-
         <!--
           ============ ANALYSIS (Phase 3) ============
           Everything below only renders if parse_resume() succeeded.
@@ -1096,7 +1088,7 @@
                 </div>
                 <p class="small text-muted mt-3 mb-0">
                     <i class="bi bi-info-circle"></i>
-                    These numbers feed the ATS score we build in Phase 4.
+                    These numbers feed the Keywords &amp; Impact part of your ATS score.
                     Resumes with measurable results
                     (<em>"reduced load time by 40%"</em>) score higher than
                     vague ones (<em>"improved performance"</em>).
